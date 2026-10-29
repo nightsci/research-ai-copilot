@@ -24,19 +24,18 @@ def test_rag_navigation_upload_index_search_and_reset():
     entry = Path(__file__).resolve().parents[1] / "research-ai-copilot.py"
     app = AppTest.from_file(entry, default_timeout=20).run()
     with patch("rag.ui.read_config", return_value=ModelConfig()), patch("rag.llm.requests.post") as model_http:
-        app.radio(key="feature_page").set_value("科研 AI 智能问答").run()
+        app.radio(key="feature_page").set_value("论文阅读").run()
         assert not app.exception
-        assert any("当前为原文证据模式" in s.value and "并非功能故障" in s.value for s in app.info)
+        assert any("AI 生成回答暂未开放" in s.value for s in app.caption)
         upload = Upload()
         with patch("rag.ui.st.file_uploader", return_value=[upload]):
             app.run()
-            button(app, "提取文字并建立索引").click().run()
+            button(app, "解析论文").click().run()
             assert not app.exception
-            assert any("已就绪" in s.value for s in app.success)
+            assert any("解析完成" in s.value for s in app.success)
             app.text_area[0].set_value("What improves corrosion resistance?")
-            assert app.checkbox[0].disabled
-            assert not app.checkbox[0].value
-            button(app, "检索原文证据").click().run()
+            assert not any(b.label == "生成 AI 回答" for b in app.button)
+            button(app, "查找原文依据").click().run()
             assert not app.exception
             answer = app.session_state["rag_answer"]
             assert answer.status == "evidence_only"
@@ -46,6 +45,6 @@ def test_rag_navigation_upload_index_search_and_reset():
             app.run()
             assert "rag_answer" not in app.session_state
             assert "rag_index" not in app.session_state
-        app.radio(key="feature_page").set_value("多源学术检索").run()
-        assert any(t.value == "📚 Scholar Connector" for t in app.title)
+        app.radio(key="feature_page").set_value("文献检索").run()
+        assert any(t.value == "探索学术文献" for t in app.header)
         assert not app.exception

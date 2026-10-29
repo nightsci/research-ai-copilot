@@ -30,10 +30,8 @@ def clear_documents():
 
 
 def render_rag(setting):
-    st.caption("RESEARCH AI COPILOT / 论文阅读")
-    st.title("📄 科研 AI 智能问答")
-    st.write("上传论文，定位原文证据与页码；模型可用时可进一步生成带引用的回答。")
-    st.caption("支持带文字层的 PDF；每个文件最多 20 MB、200 页，最多 3 个文件。页码指 PDF 物理页序号。")
+    st.header("阅读论文，快速定位关键证据")
+    st.write("上传英文论文，查找实验方法、研究结果和原文出处。")
     config = None
     config_error = ""
     try:
@@ -43,28 +41,25 @@ def render_rag(setting):
         config_error = str(exc)
     evidence_only = config is not None and not config.api_key
     if evidence_only:
-        st.info("当前为原文证据模式：可上传 PDF、提取文字、检索原文并查看来源页码。"
-                "本站未启用模型密钥，生成式 AI 回答及模型翻译暂未开放，这是演示设置，并非功能故障。")
-        st.caption("DeepSeek 中文问答、跨语言改写和引用校验已在本地真实调用中验证。"
-                   "阅读英文论文时，请在问题中加入论文使用的英文关键词；当前返回原文片段，不会生成答案。")
+        st.caption("在线版当前支持论文解析和原文证据检索，AI 生成回答暂未开放。")
     elif config_error:
         st.warning("模型暂不可用，仍可上传 PDF 和检索原文证据。")
     with st.sidebar:
-        st.header("科研问答设置")
-        if config_error:
-            st.info(config_error)
-        else:
-            st.success("模型接口已配置（尚未验证连接）")
-        st.caption("凭据从环境变量或 Streamlit Secrets 读取。配置方法见 README。")
-        top_k = st.slider("最多检索片段数", 1, 8, 5, key="rag_top_k")
-        st.caption("文档、索引和本次回答仅保存在当前会话内；服务器重启后需重新上传。")
+        st.subheader("阅读设置")
+        with st.expander("更多设置"):
+            top_k = st.slider("最多展示证据片段", 1, 8, 5, key="rag_top_k")
 
-    files = st.file_uploader("上传真实 PDF 论文", type=["pdf"], accept_multiple_files=True, key="rag_uploads")
+    st.subheader("1 · 上传论文")
+    st.caption("文字版 PDF · 单文件最多 20 MB / 200 页 · 最多 3 篇，共 30 MB。文档仅在当前会话处理，请勿上传涉密资料。")
+    files = st.file_uploader("选择 PDF 论文", type=["pdf"], accept_multiple_files=True, key="rag_uploads")
+    for file in files or []:
+        size = f"{file.size / 1024:.1f} KB" if file.size < 1024 * 1024 else f"{file.size / 1024 / 1024:.2f} MB"
+        st.text(f"{file.name} · {size}")
     manifest = tuple((f.name, hashlib.sha256(f.getvalue()).hexdigest()) for f in (files or []))
     if st.session_state.get("rag_manifest") != manifest:
         clear_documents()
         st.session_state.rag_manifest = manifest
-    if st.button("提取文字并建立索引", type="primary", disabled=not files):
+    if st.button("解析论文", type="primary", disabled=not files):
         st.session_state.pop("rag_answer", None)
         st.session_state.pop("rag_index", None)
         st.session_state.pop("rag_documents", None)
@@ -94,22 +89,27 @@ def render_rag(setting):
 
     docs = st.session_state.get("rag_documents", [])
     if not docs:
-        st.info("请上传 PDF 并建立索引。没有模型密钥也可以完成文字提取和证据检索。")
+        st.caption("上传后点击「解析论文」，即可开始查找原文。")
         return
     index = st.session_state.rag_index
-    st.success(f"已就绪：{len(docs)} 篇文档，{sum(len(d.pages) for d in docs)} 页，{len(index.chunks)} 个片段。")
+    st.success(f"解析完成：{len(docs)} 篇论文，共 {sum(len(d.pages) for d in docs)} 页。")
     for doc in docs:
-        with st.expander(f"查看提取文本 · {doc.name} · {doc.id[:8]}"):
+        with st.expander("预览论文文字"):
+            st.text(doc.name)
             if doc.empty_pages:
                 st.warning("这些页面未提取到足够文字（可能是扫描页、空白页或图片页），未进入检索：" + ", ".join(map(str, doc.empty_pages)))
             page = st.selectbox("预览物理页", [p.number for p in doc.pages], key=f"preview_{doc.id}")
             st.text(doc.pages[page - 1].text or "该页无可用文字")
-    st.caption("启用模型后，中文问题会先翻译为英文检索英文论文，再用原问题生成回答。仅查证据或无密钥时，请加入英文关键词。")
-    with st.form("rag_question_form"):
+    st.subheader("2 · 向论文提问")
+    st.caption("提问示例：这篇论文主要研究什么？ · 实验条件是什么？ · 作者得出了什么结论？")
+    st.caption("仅查原文时，请加入论文中的英文关键词，例如 experimental conditions；中文示例仅作提问思路引导。")
+    with st.container(key="question_card"), st.form("rag_question_form"):
         question = st.text_area("针对上传论文提问", placeholder="例如：论文如何设计实验？请说明相关方法与结果。", max_chars=2000)
-        use_model = st.checkbox("调用模型生成回答", value=False, disabled=bool(config_error))
-        st.caption("启用生成后，问题及最多 8 个片段会发送给模型服务。跨语言改写会额外调用一次模型；核查论文是否涉及某主题时，可能发送已提取全文（最多 90000 字符）。不上传 PDF 文件本身。")
-        submitted = st.form_submit_button("检索原文证据" if config_error else "检索并回答", type="primary")
+        if not config_error:
+            st.caption("生成回答会将问题与论文相关文本发送给模型服务；核查研究范围时可能发送已解析全文。请仅使用有权分享的资料。")
+        evidence_submitted = st.form_submit_button("查找原文依据", type="primary")
+        use_model = st.form_submit_button("生成 AI 回答") if not config_error else False
+        submitted = evidence_submitted or use_model
     if submitted:
         st.session_state.pop("rag_answer", None)
         try:
@@ -121,29 +121,33 @@ def render_rag(setting):
     if answer is None:
         return
     st.divider()
-    st.subheader("本次问题")
+    st.subheader("3 · 查看结果")
     st.text(answer.question)
-    if answer.trace:
-        with st.expander("检索调试（仅当前会话）"):
-            st.json(answer.trace)
     if answer.status == "error":
         st.error(answer.message)
     elif answer.status in ("no_evidence", "insufficient"):
         st.warning(answer.message)
     else:
-        st.info(answer.message)
+        st.text(answer.message)
+    if answer.claims:
+        st.subheader("AI 回答")
     for n, claim in enumerate(answer.claims, 1):
-        with st.container(border=True):
+        with st.container(border=True, key=f"claim_{n}"):
             # 作为纯文本展示，避免模型输出形成任意链接或 HTML。
             st.text(f"{n}. {claim.text}")
-            for citation in claim.citations:
-                e = citation.evidence
-                st.caption(f"[{e.label}] {e.chunk.document_name} · PDF 第 {e.chunk.page} 页 · {e.chunk.document_id[:8]}")
-                st.text("原文摘录：" + citation.quote)
+            with st.expander("核对引用"):
+                for citation in claim.citations:
+                    e = citation.evidence
+                    st.text(f"[{e.label}] {e.chunk.document_name} · PDF 第 {e.chunk.page} 页")
+                    st.text("原文摘录：" + citation.quote)
     if answer.evidence:
-        st.subheader("实际检索到的原文")
-        st.caption("相似度用于排序，不代表答案正确概率。引用校验只能证明摘录存在，结论是否受支持仍需阅读原文核对。")
+        st.subheader("原文依据")
+        st.caption("页码为 PDF 物理页序号。检索片段不等于答案；请结合上下文核对结论。")
         for e in answer.evidence:
-            with st.expander(f"[{e.label}] {e.chunk.document_name} · 第 {e.chunk.page} 页 · 相似度 {e.score:.3f}"):
+            with st.container(border=True, key=f"evidence_{e.label}"):
+                st.text(f"[{e.label}] {e.chunk.document_name} · 第 {e.chunk.page} 页")
                 st.text(e.chunk.text)
-                st.caption(f"文档 {e.chunk.document_id[:8]}；该页提取文本字符区间 {e.chunk.start}–{e.chunk.end}")
+        with st.expander("检索详情"):
+            st.caption("相似度只用于检索排序，不代表答案正确概率。")
+            for e in answer.evidence:
+                st.text(f"[{e.label}] 相似度 {e.score:.3f}")

@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 import streamlit as st
 from scholar.processing import export_csv, filter_papers
 from scholar.service import search_papers
+from scholar.presentation import apply_style
 
 
 def setting(name: str) -> str:
@@ -21,44 +22,45 @@ def setting(name: str) -> str:
 
 def main():
     load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-    st.set_page_config(page_title="Research AI Copilot", page_icon="📚", layout="wide")
-    st.caption("在线演示：多源文献检索、PDF 解析与原文证据定位。"
-               "公网暂不提供生成式 AI 回答；DeepSeek 问答与引用校验已在本地验证。")
-    page = st.radio("功能页面", ["多源学术检索", "科研 AI 智能问答"], horizontal=True, key="feature_page")
-    if page == "科研 AI 智能问答":
-        from rag.ui import render_rag
-        render_rag(setting)
-    else:
-        render_scholar()
+    st.set_page_config(page_title="Research AI Copilot", page_icon=":material/menu_book:",
+                       layout="wide", initial_sidebar_state="auto")
+    apply_style()
+    # 保留导航状态 key，并迁移旧版本会话中的页面名称。
+    previous = st.session_state.get("feature_page")
+    if previous in ("多源学术检索", "科研 AI 智能问答"):
+        st.session_state.feature_page = {"多源学术检索": "文献检索", "科研 AI 智能问答": "论文阅读"}[previous]
+    with st.container(key="workspace"):
+        with st.container(key="brand"):
+            st.title("Research AI Copilot")
+            st.caption("科研文献智能工作台")
+        page = st.radio("工作台导航", ["文献检索", "论文阅读"], horizontal=True,
+                        key="feature_page", label_visibility="collapsed")
+        if page == "论文阅读":
+            from rag.ui import render_rag
+            render_rag(setting)
+        else:
+            render_scholar()
 
 
 def render_scholar():
-    st.caption("RESEARCH AI COPILOT  /  第一阶段")
-    st.title("📚 Scholar Connector")
-    st.markdown("### 让科研探索，从一站式文献检索开始")
-    st.write("连接 OpenAlex 与 Crossref，检索真实学术记录，整合来源并导出你的阅读清单。")
+    st.header("探索学术文献")
+    st.write("跨平台检索研究成果，轻松整理你的阅读清单。")
     with st.sidebar:
-        st.header("检索设置")
+        st.subheader("检索范围")
         sources = st.multiselect("数据来源", ["OpenAlex", "Crossref"], default=["OpenAlex", "Crossref"])
-        limit = st.select_slider("每个来源最多取回", options=[10, 25, 50, 100], value=25)
-        st.caption("仅取回每个来源的前 N 条结果；两个来源的相关性排序方式不同。")
-        st.divider()
-        st.markdown("**连接状态**")
-        st.caption("OpenAlex：" + ("已配置 API key" if setting("OPENALEX_API_KEY") else "匿名访问"))
-        st.caption("Crossref：" + ("已配置联系邮箱" if setting("CROSSREF_MAILTO") else "公共访问"))
-        st.caption("可在 .env 或部署平台 Secrets 中配置凭据。")
-        st.markdown("[OpenAlex](https://openalex.org) · [Crossref](https://www.crossref.org)")
+        with st.expander("更多设置"):
+            limit = st.select_slider("每个来源最多取回", options=[10, 25, 50, 100], value=25)
+            st.caption("仅检索各来源的前 N 条相关记录，不代表数据库全部匹配结果。")
 
-    with st.form("search_form"):
+    with st.container(key="search_card"), st.form("search_form"):
         mode = st.radio("检索方式", ["关键词搜索", "DOI 查询"], horizontal=True)
-        query = st.text_input("关键词或 DOI", value="polysilazane corrosion coating",
-                              placeholder="输入研究主题或 10.xxxx/xxxxx")
-        use_year = st.checkbox("限定发表年份", value=False)
-        left, right = st.columns(2)
-        current_year = datetime.now(ZoneInfo("Asia/Shanghai")).year
-        start = left.number_input("起始年份", 1600, current_year + 1, 2000)
-        end = right.number_input("结束年份", 1600, current_year + 1, current_year)
-        st.caption("年份限制会发送给关键词检索接口；DOI 查询结果也会按年份筛选。")
+        query = st.text_input("研究主题或 DOI", value="", placeholder="例如 polysilazane corrosion coating 或 10.xxxx/xxxxx")
+        with st.expander("高级筛选"):
+            use_year = st.checkbox("限定发表年份", value=False)
+            left, right = st.columns(2)
+            current_year = datetime.now(ZoneInfo("Asia/Shanghai")).year
+            start = left.number_input("起始年份", 1600, current_year + 1, 2000)
+            end = right.number_input("结束年份", 1600, current_year + 1, current_year)
         submitted = st.form_submit_button("开始检索", type="primary", use_container_width=True)
     if submitted:
         # 清除上一轮，避免失败时把旧结果误认为新结果。
@@ -78,41 +80,42 @@ def render_scholar():
 
     result = st.session_state.get("search_result")
     if result is None:
-        st.info("输入主题后点击「开始检索」。页面只展示 API 实际返回的记录。")
+        st.caption("输入研究主题，开始探索相关文献。")
         return
     searched, start, end, searched_at = st.session_state.search_info
     st.divider()
     st.write(f"本次查询：{searched}")
     st.caption(f"查询时间：{searched_at}（北京时间） · 修改检索条件后请重新点击开始检索。")
     for source, error in result.errors.items():
-        st.warning(f"{source}：{error}")
-    for source, count in result.counts.items():
-        st.caption(f"✓ {source} 已连接，本次取回 {count} 条")
+        # 来源错误仍明确告知访客，但把部署操作留给维护者。
+        friendly_error = error.replace("请检查 API key、账户状态或网络访问权限", "请稍后重试或联系维护者")
+        friendly_error = friendly_error.replace("；OpenAlex 可配置自己的 API key", "")
+        st.warning(f"{source}：{friendly_error}")
     journal = st.text_input("期刊筛选（仅筛选本次取回结果，支持名称片段）", key="journal_filter",
                             placeholder="例如 Surface 或 Corrosion")
     papers = filter_papers(result.papers, start, end, journal)
     col1, col2, col3 = st.columns(3)
-    col1.metric("来源返回", sum(result.counts.values()))
+    col1.metric("本次检索总数", sum(result.counts.values()))
     col2.metric("合并去重后", len(result.papers))
     col3.metric("当前显示", len(papers))
-    st.caption("去重优先匹配 DOI；缺 DOI 时匹配标题、年份和首作者。原文按钮通往出版方页面，全文可能需要订阅。")
+    st.caption("数量仅代表本次取回记录；论文链接通往来源网站，全文可能需要订阅。")
     if not papers:
         if result.errors and not result.counts:
             st.error("所有来源均未成功，请检查网络或凭据后重试。")
         else:
             st.info("本次没有符合条件的记录。可放宽年份、清空期刊筛选或增加取回数量。")
         return
-    st.download_button("↓ 导出当前结果 CSV", export_csv(papers), "scholar-results.csv", "text/csv")
+    st.download_button("导出 CSV", export_csv(papers), "scholar-results.csv", "text/csv", icon=":material/download:")
     for index, paper in enumerate(papers, 1):
-        with st.container(border=True):
+        with st.container(border=True, key=f"paper_{index}"):
             # 标题先转义，再加入少量固定 HTML；不信任接口返回的标记。
             st.markdown(f"<h3>{index:02d} · {html.escape(paper.title or '标题未提供')}</h3>", unsafe_allow_html=True)
-            st.write("作者：" + ("；".join(paper.authors) or "未提供"))
-            st.write(f"年份：{paper.year or '未提供'}　|　期刊：{paper.journal or '未提供'}")
-            st.caption("数据来源：" + " + ".join(paper.sources))
-            st.text("DOI：" + (paper.doi or "未提供"))
-            columns = st.columns([1, 1, 1, 3])
+            st.text("作者：" + ("；".join(paper.authors) or "未提供"))
+            st.text(f"{paper.year or '年份未提供'} · {paper.journal or '期刊未提供'}")
+            st.text("来源：" + " + ".join(paper.sources))
             if paper.url:
-                columns[0].link_button("打开原文 ↗", paper.url)
-            for i, url in enumerate(paper.source_urls[:2], 1):
-                columns[i].link_button(f"来源记录 {i} ↗", url)
+                st.link_button("查看论文", paper.url, icon=":material/open_in_new:")
+            with st.expander("DOI 与来源记录"):
+                st.text("DOI：" + (paper.doi or "未提供"))
+                for i, url in enumerate(paper.source_urls[:2], 1):
+                    st.link_button(f"来源记录 {i}", url)
