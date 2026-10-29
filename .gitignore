@@ -1,0 +1,34 @@
+# Credentials: templates are safe to commit; real credentials never are.
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+**/secrets.toml
+*.pem
+*.key
+
+# Environments and caches
+.venv/
+venv/
+.python/
+.tools/
+.uv-cache/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.log
+*.tmp
+*.bak
+tmp/
+temp/
+
+# User uploads and verification artifacts
+artifacts/
+uploads/
+private/
+*.pdf
+*.docx
+*.xlsx
+*.csv
+*.zip
+.DS_Store
