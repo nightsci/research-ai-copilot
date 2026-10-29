@@ -32,7 +32,7 @@ def clear_documents():
 def render_rag(setting):
     st.caption("RESEARCH AI COPILOT / 论文阅读")
     st.title("📄 科研 AI 智能问答")
-    st.write("上传论文，检索原文证据，再生成可追溯的回答。")
+    st.write("上传论文，定位原文证据与页码；模型可用时可进一步生成带引用的回答。")
     st.caption("支持带文字层的 PDF；每个文件最多 20 MB、200 页，最多 3 个文件。页码指 PDF 物理页序号。")
     config = None
     config_error = ""
@@ -41,6 +41,14 @@ def render_rag(setting):
         config.validate()
     except RagError as exc:
         config_error = str(exc)
+    evidence_only = config is not None and not config.api_key
+    if evidence_only:
+        st.info("当前为原文证据模式：可上传 PDF、提取文字、检索原文并查看来源页码。"
+                "本站未启用模型密钥，生成式 AI 回答及模型翻译暂未开放，这是演示设置，并非功能故障。")
+        st.caption("DeepSeek 中文问答、跨语言改写和引用校验已在本地真实调用中验证。"
+                   "阅读英文论文时，请在问题中加入论文使用的英文关键词；当前返回原文片段，不会生成答案。")
+    elif config_error:
+        st.warning("模型暂不可用，仍可上传 PDF 和检索原文证据。")
     with st.sidebar:
         st.header("科研问答设置")
         if config_error:
@@ -101,7 +109,7 @@ def render_rag(setting):
         question = st.text_area("针对上传论文提问", placeholder="例如：论文如何设计实验？请说明相关方法与结果。", max_chars=2000)
         use_model = st.checkbox("调用模型生成回答", value=False, disabled=bool(config_error))
         st.caption("启用生成后，问题及最多 8 个片段会发送给模型服务。跨语言改写会额外调用一次模型；核查论文是否涉及某主题时，可能发送已提取全文（最多 90000 字符）。不上传 PDF 文件本身。")
-        submitted = st.form_submit_button("检索并回答", type="primary")
+        submitted = st.form_submit_button("检索原文证据" if config_error else "检索并回答", type="primary")
     if submitted:
         st.session_state.pop("rag_answer", None)
         try:

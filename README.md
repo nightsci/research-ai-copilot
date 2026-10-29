@@ -1,6 +1,30 @@
 # Research AI Copilot｜科研 AI 智能助手
 
+[**在线体验 →**](https://nightsci-research-ai-copilot.streamlit.app/) · [GitHub 源码](https://github.com/nightsci/research-ai-copilot)
+
+**已上线：多源学术检索 + PDF 原文证据检索。** 公网未配置 DeepSeek 密钥，暂不提供生成式回答或模型翻译；这是有意控制费用的演示模式，并非故障。
+
+**实际架构：** Python 3.12 / Streamlit → OpenAlex + Crossref；pypdf 逐页解析 → 分块 → scikit-learn TF-IDF + 余弦相似度 → 原文与页码。可选 DeepSeek OpenAI 兼容 HTTP 接口负责查询改写与回答生成，再校验引用。
+
+**验证记录：** 本次收尾回归 78 项离线自动化测试通过（2026-10-29，12.45 秒），含无密钥提示、生成禁用、证据检索及不调用模型的检查；历史真实 DeepSeek 中文问答有 5 条通过核验的引用，无关问题拒答有 2 条主题引用。云端检索、上传与证据功能由项目作者验收正常。详见 [检查报告](docs/DEPLOYMENT_CHECK.md)，离线测试不等于真实接口测试。
+
 面向科研初学者的文献发现与论文阅读工具，也是一个可演示的 AI 产品工程作品集。入口：**research-ai-copilot.py**，推荐 Python **3.12**。
+
+## 体验范围
+
+| 能力 | 公网在线演示 | 本地模型模式 |
+|---|---|---|
+| OpenAlex / Crossref 检索、DOI、筛选、去重与 CSV | 已开放 | 可用 |
+| PDF 上传、文字提取、TF-IDF 证据检索与物理页码 | 已开放 | 可用 |
+| 中文问题查询英文论文 | 请加入论文中的英文关键词；跨语言召回有限 | DeepSeek 查询改写已验证 |
+| 生成中文答案与逐条引用校验 | 暂未开放 | 已通过真实模型调用验证 |
+| 无依据处理 | 提示证据不足并展示主题候选；不据此断言全文不存在 | 支持模型辅助研究范围核查与拒答 |
+
+体验路径：先搜索 `polysilazane corrosion coating` 并打开来源链接；再切换科研问答页，上传你有权使用的文字版 PDF，点击“提取文字并建立索引”，输入论文中的关键词并点击“检索原文证据”。不要上传私人或涉密论文。
+
+## 真实 AI 问答演示视频（待提供）
+
+**视频尚未提供，此处没有虚构链接或截图。** 后续在此放置经隐私检查的真实录屏：上传授权论文 → 中文提问 → 显示真实 DeepSeek 回答 → 对照 PDF 页码及摘录 → 无关问题拒答。录屏需注明本地模型模式、模型名称和录制日期，隐藏凭据、账户信息及私人文件路径。该视频用于展示公网暂未开放的能力。
 
 ## 产品背景与用户痛点
 
@@ -23,9 +47,11 @@ flowchart LR
   C --> D[来源链接与 CSV]
   E[PDF 上传] --> F[逐页提取与分块]
   F --> G[本地 TF-IDF 索引]
-  H[问题意图与改写] --> G
+  H[问题与规则意图识别] --> G
+  H -. 可选 DeepSeek 查询改写 .-> G
   G --> I[相关片段与相邻上下文]
-  I --> J[DeepSeek 回答]
+  I --> L[公网展示原文与页码]
+  I -. 仅启用模型时 .-> J[DeepSeek 回答]
   J --> K[引用编号及原文校验]
 ```
 
@@ -45,7 +71,7 @@ py -3.12 -m venv .venv
 
 ## 配置模型和 Secrets
 
-不需要密钥即可体验学术检索和原文证据。需要生成回答时，在本机 `.env` 或 `.streamlit/secrets.toml` 中填写自己的凭据。部署时使用 Streamlit Cloud 的 Secrets，不把实际凭据放入仓库。
+不需要密钥即可体验学术检索和原文证据。需要在本地生成回答时，在本机 `.env` 或 `.streamlit/secrets.toml` 中填写自己的凭据。当前公网保持无模型密钥；将来受控演示使用服务端 Secrets，不把实际凭据放入仓库。
 
 ```toml
 LLM_API_KEY = "在平台 Secrets 中填写，不要写入本 README"
@@ -65,6 +91,8 @@ LLM_TOKEN_PARAMETER = "max_tokens"
 - 文档在服务器当前会话内处理；启用生成后会发送问题、证据片段或范围核查所需文本给配置的模型服务。不要上传私人、涉密或未经授权的科研资料。
 - 本版**没有账户鉴权、全局限流和服务端硬预算**。只要为公开网站配置共享密钥，访客就可能消耗额度；不建议直接以无限额共享密钥公开运行。作品集可先公开无密钥证据模式，模型演示使用访问受限的部署及低额度专用密钥。
 - 本项目没有自动设置服务商额度，也不承诺调用费用为零。
+
+后续开放模型功能前，按 [受控 AI 演示方案](docs/CONTROLLED_AI_DEMO.md) 实现服务端授权、持久化共享额度和预算预留。**目前仅完成设计，未实现这些控制，也未配置真实密钥。**
 
 ## 上传限制和已知限制
 
@@ -86,4 +114,4 @@ LLM_TOKEN_PARAMETER = "max_tokens"
 
 ## GitHub 与 Streamlit Cloud
 
-当前仅完成部署前准备，尚未创建远程仓库或上传。确认报告后，按 [GitHub 上传指南](docs/GITHUB.md) 操作。Streamlit Cloud 选择入口 `research-ai-copilot.py`，Advanced settings 选择 Python 3.12，并配置 Secrets。[官方部署说明](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy) · [Secrets 管理](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/secrets-management)
+项目已上传 [GitHub](https://github.com/nightsci/research-ai-copilot)，并部署到 [Streamlit Cloud](https://nightsci-research-ai-copilot.streamlit.app/)。部署分支为 `main`，入口为 `research-ai-copilot.py`；本地已验证 Python 3.12，云端运行版本以管理后台为准。公网不配置模型密钥。后续维护见 [GitHub 更新指南](docs/GITHUB.md)。[官方部署说明](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy) · [Secrets 管理](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/secrets-management)

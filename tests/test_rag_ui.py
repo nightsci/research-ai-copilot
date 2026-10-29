@@ -23,9 +23,10 @@ def button(app, label):
 def test_rag_navigation_upload_index_search_and_reset():
     entry = Path(__file__).resolve().parents[1] / "research-ai-copilot.py"
     app = AppTest.from_file(entry, default_timeout=20).run()
-    with patch("rag.ui.read_config", return_value=ModelConfig()):
+    with patch("rag.ui.read_config", return_value=ModelConfig()), patch("rag.llm.requests.post") as model_http:
         app.radio(key="feature_page").set_value("科研 AI 智能问答").run()
         assert not app.exception
+        assert any("当前为原文证据模式" in s.value and "并非功能故障" in s.value for s in app.info)
         upload = Upload()
         with patch("rag.ui.st.file_uploader", return_value=[upload]):
             app.run()
@@ -33,11 +34,14 @@ def test_rag_navigation_upload_index_search_and_reset():
             assert not app.exception
             assert any("已就绪" in s.value for s in app.success)
             app.text_area[0].set_value("What improves corrosion resistance?")
-            button(app, "检索并回答").click().run()
+            assert app.checkbox[0].disabled
+            assert not app.checkbox[0].value
+            button(app, "检索原文证据").click().run()
             assert not app.exception
             answer = app.session_state["rag_answer"]
             assert answer.status == "evidence_only"
             assert answer.evidence[0].chunk.document_name == upload.name
+            model_http.assert_not_called()
         with patch("rag.ui.st.file_uploader", return_value=[]):
             app.run()
             assert "rag_answer" not in app.session_state

@@ -22,6 +22,8 @@ def setting(name: str) -> str:
 def main():
     load_dotenv(Path(__file__).resolve().parents[1] / ".env")
     st.set_page_config(page_title="Research AI Copilot", page_icon="📚", layout="wide")
+    st.caption("在线演示：多源文献检索、PDF 解析与原文证据定位。"
+               "公网暂不提供生成式 AI 回答；DeepSeek 问答与引用校验已在本地验证。")
     page = st.radio("功能页面", ["多源学术检索", "科研 AI 智能问答"], horizontal=True, key="feature_page")
     if page == "科研 AI 智能问答":
         from rag.ui import render_rag

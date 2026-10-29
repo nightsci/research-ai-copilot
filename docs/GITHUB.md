@@ -1,29 +1,28 @@
-# 确认后上传 GitHub
+# GitHub 与线上版本维护
 
-本轮未执行以下命令，未创建远程仓库。只上传独立部署目录，不能上传整个上级 VScode 文件夹。
+仓库已创建并完成首次推送：[nightsci/research-ai-copilot](https://github.com/nightsci/research-ai-copilot)，首次提交 `b7ff840`，分支 `main`。在线演示：https://nightsci-research-ai-copilot.streamlit.app/ ，入口 `research-ai-copilot.py`，公网保持无模型密钥模式。
 
-1. 在 GitHub 创建空仓库 `research-ai-copilot`；建议先选 Private，确认无秘密与私人资料后再考虑 Public。
-2. 在部署目录运行安全扫描，再初始化本地仓库：
+只在独立部署目录操作，不重复初始化仓库或添加 origin。后续更新先测试与扫描：
 
 ```powershell
 Set-Location 'C:\Users\Administrator\Desktop\VScode\research-ai-copilot'
-.\.venv\Scripts\python.exe -m scripts.audit_release
-git init -b main
+..\.deploy-check-venv\Scripts\python.exe -m pytest -q -p no:cacheprovider
+..\.deploy-check-venv\Scripts\python.exe -m scripts.audit_release
+git remote get-url origin
 git check-ignore .env .streamlit/secrets.toml .venv/example uploads/example.pdf artifacts/example.json
-git add README.md requirements.txt requirements-dev.txt .python-version .gitignore .env.example research-ai-copilot.py scholar rag tests scripts docs .streamlit/config.toml .streamlit/secrets.toml.example
 git status --short
-git diff --cached --stat
+git diff --check
+git diff
 ```
 
-3. 确认暂存文件没有 `.env`、实际 `secrets.toml`、PDF、虚拟环境、个人材料及日志，再提交。不要把包含凭据的差异输出发给他人。
+本机验证环境位于部署目录外；新电脑按 README 创建 `.venv` 后替换解释器路径。只暂存本次明确审核的文件，确认 `git diff --cached` 中没有凭据、PDF、私人材料或日志，再创建说明实际修改的提交。
 
 ```powershell
-git commit -m "Prepare Research AI Copilot portfolio release"
-git remote add origin https://github.com/YOUR_USERNAME/research-ai-copilot.git
-git push -u origin main
+git diff --cached --check
+git diff --cached --stat
+git push origin main
 ```
 
-4. 使用自己的 GitHub 用户名替换 `YOUR_USERNAME`，通过 GitHub 正常认证，不在 remote URL 中放令牌。
-5. 在 Streamlit Cloud 创建应用，选择该仓库、main 分支、`research-ai-copilot.py`，Python 3.12。Secrets 在平台填写。先做无密钥验收，再决定是否启用收费模型。
+不要强制推送；远程有新提交时先检查和整合，不能覆盖。不在 remote URL 中放令牌。推送后核对 GitHub main 提交及文件内容，再检查 Streamlit Cloud 构建状态和两页面；GitHub 更新不等于云端构建成功。当前不配置模型密钥；收费演示须先完成 [受控方案](CONTROLLED_AI_DEMO.md)。
 
 安全扫描不保证发现所有形式的密钥；若密钥曾提交到 Git，删除工作区文件不能清除历史，需要先撤销/轮换密钥，再处理历史。不要使用 `git add -f` 强制加入被忽略的文件。
